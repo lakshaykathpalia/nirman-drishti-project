@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NirmanDrishti | MPLADS Audit &amp; Integrity Platform</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="layout">
+
+    <!-- ============================ SIDEBAR ============================ -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="emblem"><i class="fa-solid fa-shield-halved"></i></div>
+            <div class="title">NirmanDrishti</div>
+            <div class="title-hi">निर्माण दृष्टि</div>
+            <div class="ministry">
+                Ministry of Statistics &amp;<br>Programme Implementation<br>Government of India
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-label">Audit</div>
+            <button class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+                <i class="fa-solid fa-gauge-high"></i> Overview
+            </button>
+            <button class="nav-item" data-view="findings" onclick="switchView('findings')">
+                <i class="fa-solid fa-flag"></i> Findings
+                <span class="nav-count" id="nav-count-findings">—</span>
+            </button>
+            <button class="nav-item" data-view="map" onclick="switchView('map')">
+                <i class="fa-solid fa-location-dot"></i> Geospatial Map
+            </button>
+
+            <div class="nav-label">Registers</div>
+            <button class="nav-item" data-view="works" onclick="switchView('works')">
+                <i class="fa-solid fa-list-check"></i> Projects Register
+                <span class="nav-count" id="nav-count-works">—</span>
+            </button>
+            <button class="nav-item" data-view="mps" onclick="switchView('mps')">
+                <i class="fa-solid fa-landmark"></i> MP Directory
+                <span class="nav-count" id="nav-count-mps">—</span>
+            </button>
+
+            <div class="nav-label">Reference</div>
+            <button class="nav-item" data-view="method" onclick="switchView('method')">
+                <i class="fa-solid fa-book"></i> Methodology
+            </button>
+        </nav>
+
+        <div class="sidebar-foot">
+            Problem Statement SIH26102<br>
+            Build 1.0 · SQLite / FastAPI
+        </div>
+    </aside>
+
+    <!-- ============================= MAIN ============================== -->
+    <div class="main">
+
+        <div class="utility-strip">
+            <span>भारत सरकार · Government of India · Ministry of Statistics and Programme Implementation</span>
+            <span>MPLAD Scheme</span>
+        </div>
+
+        <header class="topbar">
+            <div>
+                <div class="breadcrumb">Home › <span id="crumb">Audit Overview</span></div>
+                <h1 class="page-title" id="page-title">Audit Overview</h1>
+                <p class="page-sub" id="page-sub">Automated integrity screening of MPLADS sanctioned works</p>
+            </div>
+            <div class="topbar-actions">
+                <button class="btn" onclick="window.print()" title="Print or save as PDF">
+                    <i class="fa-solid fa-print"></i> Print report
+                </button>
+                <button class="btn" onclick="resetData()" title="Re-ingest the portal dataset">
+                    <i class="fa-solid fa-rotate-right"></i> Re-sync
+                </button>
+                <button class="btn btn-primary" id="btn-trigger-audit" onclick="runLiveAudit()">
+                    <i class="fa-solid fa-play"></i> Run audit
+                </button>
+            </div>
+        </header>
+
+        <div class="content">
+
+            <!-- Scope, stated once and kept out of the way of the findings. -->
+            <div class="scope-strip">
+                <div class="scope-item"><b id="scope-mps">—</b> constituencies</div>
+                <div class="scope-item"><b id="scope-works">—</b> works audited</div>
+                <div class="scope-item">₹<b id="scope-alloc">—</b> Cr under surveillance</div>
+                <div class="scope-item">Source: <b>MoSPI portal dataset</b></div>
+                <div class="scope-item">Last audit <b id="scope-time">—</b></div>
+            </div>
+
+            <!-- ======================= VIEW: OVERVIEW ======================= -->
+            <section class="view" id="view-dashboard">
+
+                <div class="section">
+                    <div class="kpi-grid">
+                        <div class="kpi is-critical">
+                            <div class="kpi-label">Confirmed findings</div>
+                            <div class="kpi-figure" id="kpi-confirmed">—</div>
+                            <div class="kpi-foot">Critical and high severity</div>
+                        </div>
+                        <div class="kpi is-high">
+                            <div class="kpi-label">Value at risk</div>
+                            <div class="kpi-figure">₹<span id="kpi-risk">—</span><span class="unit">L</span></div>
+                            <div class="kpi-foot">Sanctioned value of flagged works</div>
+                        </div>
+                        <div class="kpi is-high">
+                            <div class="kpi-label">Largest overcharge</div>
+                            <div class="kpi-figure">₹<span id="kpi-overcharge">—</span><span class="unit">L</span></div>
+                            <div class="kpi-foot" id="kpi-overcharge-foot">Above PWD ceiling</div>
+                        </div>
+                        <div class="kpi is-neutral">
+                            <div class="kpi-label">Engines reporting</div>
+                            <div class="kpi-figure"><span id="kpi-engines">—</span><span class="unit"> / 4</span></div>
+                            <div class="kpi-foot">Detection methods with hits</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-head">
+                        <div>
+                            <div class="section-title">Triage by severity</div>
+                            <div class="section-note">Alerts are graded so reviewers work the specific cases first.</div>
+                        </div>
+                    </div>
+                    <div class="ladder">
+                        <div class="ladder-cell sev-critical">
+                            <div class="ladder-top"><span class="dot dot-critical"></span><span class="ladder-name">Critical</span></div>
+                            <div class="ladder-count" id="lad-critical">—</div>
+                            <div class="ladder-desc">Duplicate assets and ceiling breaches</div>
+                        </div>
+                        <div class="ladder-cell sev-high">
+                            <div class="ladder-top"><span class="dot dot-high"></span><span class="ladder-name">High</span></div>
+                            <div class="ladder-count" id="lad-high">—</div>
+                            <div class="ladder-desc">Collusive bidding and stalled works</div>
+                        </div>
+                        <div class="ladder-cell sev-advisory">
+                            <div class="ladder-top"><span class="dot dot-advisory"></span><span class="ladder-name">Advisory</span></div>
+                            <div class="ladder-count" id="lad-advisory">—</div>
+                            <div class="ladder-desc">Unspent balance notices · threshold under review</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section grid-2">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div>
+                                <div class="panel-title">Sanctioned cost against PWD ceiling</div>
+                                <div class="section-note">Works priced above the state Schedule of Rates.</div>
+                            </div>
+                        </div>
+                        <div class="panel-body chart-cost" id="chart-cost">
+                            <div class="empty-row">Loading rate comparison…</div>
+                        </div>
+                        <div class="panel-foot">
+                            <span>Benchmark: State PWD Schedule of Rates</span>
+                            <span>Bar shows sanctioned amount · line marks the ceiling</span>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div class="panel-title">Findings by detection type</div>
+                        </div>
+                        <div class="panel-body" id="chart-types">
+                            <div class="empty-row">Loading…</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-head">
+                        <div>
+                            <div class="section-title">Priority cases</div>
+                            <div class="section-note">Highest-severity findings, each with the measurement that triggered it.</div>
+                        </div>
+                        <button class="link-btn" onclick="switchView('findings')">View all findings →</button>
+                    </div>
+                    <div id="priority-findings">
+                        <div class="empty-row">Loading findings…</div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ======================= VIEW: FINDINGS ======================= -->
+            <section class="view" id="view-findings" hidden>
+                <div class="section">
+                    <div class="section-head">
+                        <div>
+                            <div class="section-title">Audit findings register</div>
+                            <div class="section-note" id="findings-note">All alerts raised by the four detection engines.</div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <button class="btn" id="filt-confirmed" onclick="setFindingFilter('confirmed')">Confirmed only</button>
+                            <button class="btn" id="filt-all" onclick="setFindingFilter('all')">Include advisory</button>
+                        </div>
+                    </div>
+                    <div id="all-findings">
+                        <div class="empty-row">Loading findings…</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================= VIEW: MAP ========================== -->
+            <section class="view" id="view-map" hidden>
+                <div class="section">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div class="panel-title">Geospatial asset surveillance</div>
+                            <div class="map-legend">
+                                <span><span class="dot dot-critical"></span> Critical</span>
+                                <span><span class="dot dot-high"></span> High</span>
+                                <span><span class="dot dot-ok"></span> Verified</span>
+                            </div>
+                        </div>
+                        <div class="panel-body flush"><div id="gis-map"></div></div>
+                        <div class="panel-foot">
+                            <span>Select a marker for coordinates and audit status.</span>
+                            <span>Basemap © OpenStreetMap contributors</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div>
+                                <div class="panel-title">Contractor co-bidding network</div>
+                                <div class="section-note">Bipartite graph of contractors and the tenders they bid on.</div>
+                            </div>
+                            <span class="chip chip-plain">NetworkX</span>
+                        </div>
+                        <div class="panel-body flush"><div id="cartel-network"></div></div>
+                        <div class="panel-foot">
+                            <span>Solid edge = winning bid · dashed edge = losing bid</span>
+                            <span id="cartel-note">—</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ======================== VIEW: WORKS ========================= -->
+            <section class="view" id="view-works" hidden>
+                <div class="section">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div>
+                                <div class="panel-title">Sanctioned projects register</div>
+                                <div class="section-note">Works under audit, ordered by number of alerts raised.</div>
+                            </div>
+                            <input type="text" id="table-search" class="search" placeholder="Search work, location, MP…" oninput="filterTable()">
+                        </div>
+                        <div class="panel-body flush">
+                            <div class="table-wrap">
+                                <table class="data">
+                                    <thead>
+                                        <tr>
+                                            <th>Work ID</th>
+                                            <th>Project</th>
+                                            <th>Category</th>
+                                            <th>Constituency / Member</th>
+                                            <th class="num">Sanctioned (₹L)</th>
+                                            <th>Progress</th>
+                                            <th>Status</th>
+                                            <th>Risk</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="works-table-body">
+                                        <tr><td colspan="8" class="empty-row">Loading register…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="panel-foot"><span id="works-foot">—</span><span>Amounts in lakh rupees</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================= VIEW: MPS ========================== -->
+            <section class="view" id="view-mps" hidden>
+                <div class="section">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div>
+                                <div class="panel-title">Members of Parliament — allocation directory</div>
+                                <div class="section-note">Official MoSPI allocation dataset, ingested in full.</div>
+                            </div>
+                            <input type="text" id="mps-search" class="search" placeholder="Search member, constituency, state…" oninput="filterMpsTable()">
+                        </div>
+                        <div class="panel-body flush">
+                            <div class="table-wrap table-scroll">
+                                <table class="data">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Hon'ble Member</th>
+                                            <th>Constituency</th>
+                                            <th>State / UT</th>
+                                            <th class="num">Allocated (₹ Cr)</th>
+                                            <th class="num">Allocated (₹)</th>
+                                            <th>House</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mps-table-body">
+                                        <tr><td colspan="7" class="empty-row">Loading directory…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="panel-foot">
+                            <span id="mps-foot">—</span>
+                            <span class="mono">data/mp_allocations.csv</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====================== VIEW: METHODOLOGY ===================== -->
+            <section class="view" id="view-method" hidden>
+                <div class="section grid-half">
+                    <div class="panel">
+                        <div class="panel-head"><div class="panel-title">Detection engines</div></div>
+                        <div class="panel-body">
+
+                            <div class="method">
+                                <div class="method-num">01</div>
+                                <div>
+                                    <div class="method-title">Spatial duplicate detection</div>
+                                    <p class="method-desc">Computes great-circle distance between every pair of same-category works within a constituency. Two assets of the same type sanctioned within the radius threshold are flagged as a probable duplicate claim.</p>
+                                    <div class="method-spec"><span class="spec">Haversine formula</span><span class="spec">threshold ≤ 100 m</span><span class="spec">SQL + Python</span></div>
+                                </div>
+                            </div>
+
+                            <div class="method">
+                                <div class="method-num">02</div>
+                                <div>
+                                    <div class="method-title">Collusive bidding detection</div>
+                                    <p class="method-desc">Builds a bipartite graph of contractors and tenders. Edge weight counts how often two contractors appear in the same bidding pool; repeated co-bidding with rotating winners indicates cover bidding.</p>
+                                    <div class="method-spec"><span class="spec">NetworkX graph</span><span class="spec">weight ≥ 2 tenders</span><span class="spec">pairwise edges</span></div>
+                                </div>
+                            </div>
+
+                            <div class="method">
+                                <div class="method-num">03</div>
+                                <div>
+                                    <div class="method-title">Rate benchmark &amp; cost outlier analysis</div>
+                                    <p class="method-desc">Compares each sanctioned amount against the state PWD Schedule of Rates ceiling for its category, then applies a standard-score test to surface costs that deviate sharply from the population.</p>
+                                    <div class="method-spec"><span class="spec">PWD SoR ceiling</span><span class="spec">ratio ≥ 1.5×</span><span class="spec">Z-score &gt; 2.5</span></div>
+                                </div>
+                            </div>
+
+                            <div class="method">
+                                <div class="method-num">04</div>
+                                <div>
+                                    <div class="method-title">Fund stagnation monitoring</div>
+                                    <p class="method-desc">Measures elapsed time since sanction against reported physical progress, and tracks constituency-level unspent balances to identify capital that has been released but not deployed.</p>
+                                    <div class="method-spec"><span class="spec">SQL temporal query</span><span class="spec">≥ 180 days</span><span class="spec">&lt; 20% progress</span></div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="panel" style="margin-bottom:20px">
+                            <div class="panel-head"><div class="panel-title">Why rule-based, not a neural model</div></div>
+                            <div class="panel-body">
+                                <p class="method-desc">Every alert this system raises must survive scrutiny in a departmental inquiry. A finding an officer cannot independently recompute cannot be acted upon.</p>
+                                <p class="method-desc" style="margin-top:10px">Each detection therefore carries its own arithmetic — the measured distance, the rate ratio, the elapsed days, the co-bid count — recorded alongside the alert and reproducible from the source records.</p>
+                            </div>
+                        </div>
+
+                        <div class="panel">
+                            <div class="panel-head"><div class="panel-title">Stated limitations</div></div>
+                            <div class="panel-body">
+                                <p class="method-desc"><b>Advisory tier is low-specificity.</b> The demo dataset assigns every constituency an identical unspent ratio, so the unspent-balance rule fires almost universally. It is reported separately from confirmed findings and excluded from headline counts.</p>
+                                <p class="method-desc" style="margin-top:10px"><b>Cartel detection reports pairs.</b> A colluding group of three currently surfaces as three pairwise relationships rather than one ring. Clique consolidation is not yet implemented.</p>
+                                <p class="method-desc" style="margin-top:10px"><b>Project data is demonstration scale.</b> Constituency and allocation records are the official published dataset; the sanctioned works used to exercise the detectors are synthetic.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+</div>
+
+<!-- ============================== MODAL ============================== -->
+<div class="modal-backdrop" id="evidence-modal" hidden onclick="if(event.target===this)closeModal()">
+    <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+            <div>
+                <div class="field-label">Audit evidence</div>
+                <h3 class="panel-title" id="modal-title">—</h3>
+            </div>
+            <button class="icon-btn" onclick="closeModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" id="modal-content"></div>
+        <div class="modal-foot">
+            <button class="btn" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast" hidden>
+    <div class="toast-title" id="toast-title">—</div>
+    <div class="toast-body" id="toast-body"></div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
