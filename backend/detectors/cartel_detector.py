@@ -33,6 +33,7 @@ def run_cartel_detection(min_shared_tenders=None):
 
     tender_contractors = {}
     contractor_tenders = {}
+    tender_work = {}
     contractor_names = {}
     contractor_wins = {}
 
@@ -48,6 +49,9 @@ def run_cartel_detection(min_shared_tenders=None):
         # Per-contractor tender sets, needed for the Jaccard overlap below.
         contractor_tenders.setdefault(c_id, set()).add(t_id)
 
+        # Tender -> work, so each finding can be attached to a real project.
+        tender_work[t_id] = row['work_id']
+
         if row['is_winning_bid'] == 1:
             contractor_wins[c_id] = contractor_wins.get(c_id, 0) + 1
 
@@ -62,6 +66,7 @@ def run_cartel_detection(min_shared_tenders=None):
                     G.add_edge(c1, c2, weight=1)
 
     anomalies_found = []
+    contractor_risk = {}
     suspicious_edges = [(u, v, d['weight']) for u, v, d in G.edges(data=True) if d['weight'] >= min_shared_tenders]
 
     for u, v, weight in suspicious_edges:
@@ -82,19 +87,35 @@ def run_cartel_detection(min_shared_tenders=None):
         math_proof = (f"Co-Bidding Frequency W({u}, {v}) = {weight} tenders >= {min_shared_tenders} threshold. "
                       f"Jaccard Index |A intersect B| / |A union B| = {len(set_u & set_v)}/{union} = {jaccard:.1f}%.")
 
-        cursor.execute("UPDATE contractors SET risk_score = 0.85 WHERE contractor_id IN (?, ?);", (u, v))
+        # Risk score derived from the evidence rather than assigned a flat value:
+        # a floor for being flagged at all, plus the overlap and the co-bid count.
+        # A contractor keeps the highest score across all of its relationships.
+        risk = min(0.95, 0.35 + 0.35 * (jaccard / 100.0) + 0.05 * weight)
+        for c_id in (u, v):
+            contractor_risk[c_id] = max(contractor_risk.get(c_id, 0.0), risk)
+
+        # Attach the finding to a work one of the shared tenders actually funded,
+        # picked deterministically so re-runs are stable.
+        shared = sorted(set_u & set_v)
+        work_id = next((tender_work.get(t) for t in shared if tender_work.get(t)), None)
 
         cursor.execute("""
         INSERT INTO anomalies (work_id, anomaly_type, severity, title, description, mathematical_evidence)
         VALUES (?, 'CARTEL_BID_RIGGING', 'HIGH', ?, ?, ?);
-        """, ('WRK-PAT-01', title, desc, math_proof))
+        """, (work_id, title, desc, math_proof))
 
         anomalies_found.append({
             "contractor_1": name_u,
             "contractor_2": name_v,
             "shared_tenders": weight,
+            "jaccard_percent": round(jaccard, 1),
+            "work_id": work_id,
             "proof": math_proof
         })
+
+    for c_id, risk in contractor_risk.items():
+        cursor.execute("UPDATE contractors SET risk_score = ? WHERE contractor_id = ?;",
+                       (round(risk, 2), c_id))
 
     conn.commit()
     conn.close()

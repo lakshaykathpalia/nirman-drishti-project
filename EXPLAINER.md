@@ -101,10 +101,12 @@ Crucially, **every alert stores the arithmetic that produced it** — the measur
 * **Real detected case:** `Elapsed Days = 693 >= 180 Threshold. Progress = 5%.`
   *(This number grows daily — it is computed from the current date, so quote whatever the screen shows.)*
 
-> ⚠️ **The unspent-balance rule currently fires on almost every constituency.**
-> Our demo seed gives every constituency the same 35% unspent ratio, so 542 of the 543 clear the
-> ₹2 crore threshold. These are reported in a **separate advisory tier** and excluded from headline
-> counts. Always say **"6 confirmed findings"**, never "548 anomalies".
+> ⚠️ **The unspent balances behind this rule are synthetic.**
+> The published allocation dataset has no expenditure column, so each constituency's unspent
+> balance is generated from a stable hash of its name — reproducible, and skewed so most
+> constituencies have spent well. The rule needs **both** a ≥ 40% unspent ratio **and** a ≥ ₹2 Cr
+> balance, which flags **84 of 543**. These sit in a **separate advisory tier** and are excluded
+> from headline counts. Always say **"6 confirmed findings"**, never "90 anomalies".
 
 ---
 
@@ -119,7 +121,7 @@ All six thresholds are in a single file — `backend/config.py`. Tuning audit se
 | Price inflation | ≥ 1.5× PWD ceiling | `PRICE_INFLATION_MULTIPLIER` |
 | Cost outlier | Z > 2.5 | `PRICE_OUTLIER_Z_SCORE` |
 | Stagnation | ≥ 180 days, < 20% | `STAGNATION_IDLE_DAYS` |
-| Idle funds | ≥ ₹2.00 Cr unspent | `IDLE_FUNDS_THRESHOLD_CR` |
+| Idle funds | ≥ ₹2.00 Cr **and** ≥ 40% unspent | `IDLE_FUNDS_THRESHOLD_CR`, `IDLE_FUNDS_MIN_UNSPENT_RATIO` |
 
 ---
 
@@ -149,7 +151,7 @@ If the dashboard looks dark and neon, press **Ctrl+Shift+R** — that is a stale
 | Figure | Value |
 | :--- | :--- |
 | Confirmed findings | **6** (2 critical, 4 high) |
-| Advisory notices | 542 (unspent-balance tier) |
+| Advisory notices | 84 (unspent-balance tier, synthetic balances) |
 | Sanctioned value at risk | **₹150.15 lakh** |
 | Largest single overcharge | **₹37.50 lakh** above ceiling (Jaipur Rural) |
 | Constituencies ingested | **543** (real MoSPI dataset) |

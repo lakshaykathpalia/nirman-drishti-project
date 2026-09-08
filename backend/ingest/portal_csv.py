@@ -10,6 +10,7 @@ separate in backend/seed/demo_scenarios.py so the two are never confused.
 """
 
 import csv
+import hashlib
 import os
 import sys
 
@@ -17,6 +18,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 RUPEES_PER_CRORE = 10000000.0
+
+
+def demo_unspent_ratio(key):
+    """Synthetic unspent-balance ratio for one constituency.
+
+    The published allocation dataset carries no expenditure column, so the
+    unspent balance has to be generated. It is derived from a stable hash of
+    the constituency name — identical on every run and every machine — and
+    skewed by DEMO_UNSPENT_SKEW so most constituencies sit near the floor and
+    only a minority show a large idle balance.
+
+    Replace this with real PFMS expenditure data and the idle-funds detector
+    becomes a genuine finding rather than a demonstration.
+    """
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    r = int(digest[:8], 16) / 0xFFFFFFFF                     # uniform 0..1
+    return config.DEMO_UNSPENT_RATIO_MIN + config.DEMO_UNSPENT_RATIO_SPREAD * (r ** config.DEMO_UNSPENT_SKEW)
 
 
 def load_portal_rows(csv_path=None):
@@ -58,7 +76,7 @@ def load_portal_rows(csv_path=None):
 
             count += 1
             allocated_cr = round(allocated_rs / RUPEES_PER_CRORE, 2)
-            unspent_cr = round(allocated_cr * config.DEMO_UNSPENT_RATIO, 2)
+            unspent_cr = round(allocated_cr * demo_unspent_ratio(const_name or str(count)), 2)
 
             constituency_records.append(
                 (f"CONST-{count:03d}", const_name, state, "General", allocated_cr, unspent_cr)

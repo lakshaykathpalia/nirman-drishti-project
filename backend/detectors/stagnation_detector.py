@@ -53,17 +53,23 @@ def run_stagnation_detection(idle_days_threshold=None, unspent_balance_threshold
                 "proof": math_proof
             })
 
+    # Both conditions must hold: a materially large balance, and a large share
+    # of the allocation. Either alone flags most of the country.
     cursor.execute("""
     SELECT constituency_id, name, state, total_allocated_cr, unspent_balance_cr
     FROM constituencies
-    WHERE unspent_balance_cr >= ?;
-    """, (unspent_balance_threshold_cr,))
+    WHERE unspent_balance_cr >= ?
+      AND total_allocated_cr > 0
+      AND (unspent_balance_cr / total_allocated_cr) >= ?;
+    """, (unspent_balance_threshold_cr, config.IDLE_FUNDS_MIN_UNSPENT_RATIO))
     idle_constituencies = cursor.fetchall()
 
     for c in idle_constituencies:
         title = f"High Unspent Fund Accumulation: {c['name']} (Rs {c['unspent_balance_cr']:.2f} Cr)"
         desc = f"Constituency '{c['name']}' ({c['state']}) has Rs {c['unspent_balance_cr']:.2f} Cr unspent out of Rs {c['total_allocated_cr']:.2f} Cr allocated."
-        math_proof = f"Unspent Ratio: {(c['unspent_balance_cr'] / c['total_allocated_cr']) * 100:.1f}% >= 40% target."
+        math_proof = (f"Unspent Ratio: {(c['unspent_balance_cr'] / c['total_allocated_cr']) * 100:.1f}% "
+                      f">= {config.IDLE_FUNDS_MIN_UNSPENT_RATIO * 100:.0f}% threshold, "
+                      f"and Rs {c['unspent_balance_cr']:.2f} Cr >= Rs {unspent_balance_threshold_cr:.2f} Cr floor.")
 
         cursor.execute("""
         INSERT INTO anomalies (work_id, anomaly_type, severity, title, description, mathematical_evidence)
