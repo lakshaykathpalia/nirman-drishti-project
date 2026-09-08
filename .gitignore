@@ -1,0 +1,21 @@
+# Generated database — rebuilt from data/mp_allocations.csv on every `python run.py`
+backend/mplads.db
+*.db-journal
+*.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

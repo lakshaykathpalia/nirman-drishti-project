@@ -1,0 +1,9 @@
+# NirmanDrishti (SIH26102) — Python dependencies
+# Install with:  pip install -r requirements.txt
+#
+# Everything else the project uses (sqlite3, csv, math, datetime) ships with
+# the Python standard library. Requires Python 3.10+.
+
+fastapi>=0.110.0        # REST API framework serving /api/* endpoints
+uvicorn>=0.27.0         # ASGI server that runs the FastAPI app
+networkx>=3.0           # Bipartite co-bidding graph for cartel detection
