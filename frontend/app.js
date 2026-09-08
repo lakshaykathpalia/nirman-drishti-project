@@ -293,7 +293,7 @@ function renderTypeChart() {
                 <span class="name">${labels.IDLE_FUNDS} <span class="secondary">· advisory</span></span>
                 <span class="val">${fmtInt(advisory)}</span>
             </div>
-            <div class="section-note">Excluded from the scale above — this rule currently fires on nearly every constituency.</div>
+            <div class="section-note">Excluded from the scale above — constituency-level notices, reported separately from confirmed findings.</div>
         </div>` : '';
 
     $('chart-types').innerHTML = bars + aside;

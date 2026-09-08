@@ -100,7 +100,7 @@ MPLADS data is inherently relational — an MP recommends a work, a work has a t
 
 Stated plainly, because they matter when reading the output:
 
-- **Idle-funds alerts are currently uninformative.** The demo seed assigns every constituency 35% of its allocation as unspent, which is above the ₹2 Cr threshold — so the alert fires on essentially all 543 rows. Treat the `IDLE_FUNDS` count as a placeholder, not a finding. Tune `IDLE_FUNDS_THRESHOLD_CR` in `config.py` or replace the seed with real expenditure data.
+- **Idle-funds alerts are advisory, and the balances behind them are synthetic.** The published allocation dataset carries no expenditure column, so each constituency's unspent balance is generated from a stable hash of its name (see `demo_unspent_ratio` in `backend/ingest/portal_csv.py`). The rule requires both a ≥ 40% unspent ratio and a ≥ ₹2 Cr balance, which flags 84 of 543 constituencies. Replace the seed with real PFMS expenditure data and this becomes a genuine finding rather than a demonstration.
 - **Cartel detection reports pairs, not rings.** A colluding trio surfaces as its three pairwise edges rather than one group. Clique detection is not yet implemented.
 - **The works table is demo-scale.** 543 constituencies are real; the 14 works are fixtures. The spatial detector is O(n²) and would need spatial bucketing before running at national scale.
 - **No machine-learning model is used.** Price outliers use a hand-computed Z-score. There is no Isolation Forest in this codebase.

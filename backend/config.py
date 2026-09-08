@@ -52,15 +52,21 @@ PRICE_OUTLIER_Z_SCORE = 2.5
 STAGNATION_IDLE_DAYS = 180
 STAGNATION_MAX_COMPLETION_PERCENT = 20
 
-# Constituency-level unspent balance (in crore) that triggers an idle-funds
-# alert. NOTE: the demo seed gives every constituency ~35% of its allocation
-# as unspent, so at 2.0 this fires on essentially all 543 rows. See README.
+# Constituency-level idle funds. Both conditions must hold, so the rule
+# reports constituencies that have left a large *proportion* of a materially
+# large allocation unspent — not merely those with big budgets.
 IDLE_FUNDS_THRESHOLD_CR = 2.0
+IDLE_FUNDS_MIN_UNSPENT_RATIO = 0.40
 
 # --- Seed / ingestion defaults ---------------------------------------------
 
 # Fallback allocation (rupees) when a portal CSV row has an unparseable amount.
 DEFAULT_ALLOCATION_INR = 147000000.0
 
-# Fraction of each constituency's allocation recorded as unspent in the demo seed.
-DEMO_UNSPENT_RATIO = 0.35
+# Unspent-balance spread for the demo seed. Each constituency gets a ratio
+# derived deterministically from its name, skewed so most have spent well and
+# a minority are badly behind — which is what real utilisation looks like.
+# A single flat ratio would make the idle-funds rule fire on every row.
+DEMO_UNSPENT_RATIO_MIN = 0.03
+DEMO_UNSPENT_RATIO_SPREAD = 0.62
+DEMO_UNSPENT_SKEW = 3          # higher = more constituencies clustered near the floor
