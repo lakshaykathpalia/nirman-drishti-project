@@ -12,6 +12,7 @@ the bottom. Screenshots are 3000 px wide (2× device scale) — they stay sharp 
 
 | Slide | Asset | What it shows |
 | :-- | :-- | :-- |
+| 2 · Proposed Solution | `slide-proposed-solution.png` | **Full-bleed submission slide** — problem figures, solution statement, six-step pipeline, shipped features |
 | 2 · Proposed Solution | `01-overview.png` | The dashboard at rest — 6 confirmed findings, triage ladder, both charts |
 | 2 · Proposed Solution | `08-evidence-modal.png` | Stored proof for one finding — the explainability claim, made concrete |
 | 3 · Technical Approach | `d1-architecture.png` | Sources → SQL store → four detectors → API → dashboard |
@@ -56,6 +57,7 @@ the bottom. Screenshots are 3000 px wide (2× device scale) — they stay sharp 
 | `d4-cartel.png` | 1600×860 |
 | `d5-data-model.png` | 1600×860 |
 | `d6-cost-ceiling.png` | 1400×620 |
+| `slide-proposed-solution.png` | 1920×1080 (16:9, drop in as a full slide) |
 
 ---
 
@@ -77,6 +79,7 @@ day count increases — everything else is stable.
 python run.py                       # server must be running for screenshots
 python <scratch>/shots.py docs/assets
 python <scratch>/diagrams.py docs/assets
+python tools/build_solution_slide.py docs/assets
 ```
 
 Screenshots need `playwright` plus its Chromium build (`python -m playwright install chromium`).
