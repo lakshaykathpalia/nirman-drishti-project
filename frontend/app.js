@@ -2,6 +2,7 @@
 // MoSPI MPLADS Integrity Platform (SIH26102)
 
 let mapInstance = null;
+let cartelNetwork = null;
 let markersLayer = null;
 
 let allWorks = [];
@@ -514,7 +515,7 @@ async function initCartelGraph() {
             title: `₹${l.amount} L — ${l.is_winner ? 'winning bid' : 'losing bid'}`
         })));
 
-        new vis.Network(container, { nodes, edges }, {
+        cartelNetwork = new vis.Network(container, { nodes, edges }, {
             physics: { barnesHut: { gravitationalConstant: -3200, springLength: 105 }, stabilization: { iterations: 120 } },
             interaction: { hover: true, tooltipDelay: 120 }
         });
@@ -591,7 +592,14 @@ function switchView(view) {
     $('crumb').textContent = title;
 
     window.scrollTo({ top: 0 });
-    if (view === 'map' && mapInstance) setTimeout(() => mapInstance.invalidateSize(), 120);
+    // Both canvases are built while this view is hidden, so their containers
+    // measure zero. Re-measure and re-fit once the view is actually on screen.
+    if (view === 'map') {
+        setTimeout(() => {
+            if (mapInstance) mapInstance.invalidateSize();
+            if (cartelNetwork) { cartelNetwork.redraw(); cartelNetwork.fit(); }
+        }, 120);
+    }
 }
 
 /* ----------------------------------------------------------------- actions */
