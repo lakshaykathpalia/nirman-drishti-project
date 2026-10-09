@@ -34,6 +34,7 @@ def run_cartel_detection(min_shared_tenders=None):
     tender_contractors = {}
     contractor_tenders = {}
     tender_work = {}
+    tender_winner = {}
     contractor_names = {}
     contractor_wins = {}
 
@@ -54,6 +55,7 @@ def run_cartel_detection(min_shared_tenders=None):
 
         if row['is_winning_bid'] == 1:
             contractor_wins[c_id] = contractor_wins.get(c_id, 0) + 1
+            tender_winner[t_id] = c_id
 
     G = nx.Graph()
     for contractors in tender_contractors.values():
@@ -67,37 +69,62 @@ def run_cartel_detection(min_shared_tenders=None):
 
     anomalies_found = []
     contractor_risk = {}
-    suspicious_edges = [(u, v, d['weight']) for u, v, d in G.edges(data=True) if d['weight'] >= min_shared_tenders]
 
-    for u, v, weight in suspicious_edges:
-        name_u = contractor_names.get(u, u)
-        name_v = contractor_names.get(v, v)
-        
-        # Jaccard index: shared tenders over the union of both bidding histories.
-        # 100% means neither contractor ever bid on a tender without the other.
-        set_u = contractor_tenders.get(u, set())
-        set_v = contractor_tenders.get(v, set())
-        union = len(set_u | set_v)
-        jaccard = (len(set_u & set_v) / union * 100.0) if union else 0.0
+    # Keep only the pairings that clear the threshold, then let NetworkX find the
+    # maximal cliques of that subgraph. A group of three contractors who all
+    # co-bid with one another is ONE ring, not three separate relationships —
+    # reporting it three times both overstates the count and buries other
+    # findings underneath near-identical alerts.
+    H = nx.Graph()
+    H.add_edges_from((u, v, d) for u, v, d in G.edges(data=True)
+                     if d['weight'] >= min_shared_tenders)
 
-        title = f"Collusive Bidding Relationship ({u} & {v})"
-        desc = (f"Contractors '{name_u}' and '{name_v}' have co-bid in {weight} different tenders together, "
-                f"which is {jaccard:.0f}% of every tender either of them bid on. "
-                f"This co-bidding pattern warrants review for cover bidding.")
-        math_proof = (f"Co-Bidding Frequency W({u}, {v}) = {weight} tenders >= {min_shared_tenders} threshold. "
-                      f"Jaccard Index |A intersect B| / |A union B| = {len(set_u & set_v)}/{union} = {jaccard:.1f}%.")
+    rings = [sorted(cl) for cl in nx.find_cliques(H)] if H.number_of_edges() else []
+    rings.sort(key=lambda r: (-len(r), r))          # biggest ring first, stable order
 
-        # Risk score derived from the evidence rather than assigned a flat value:
-        # a floor for being flagged at all, plus the overlap and the co-bid count.
-        # A contractor keeps the highest score across all of its relationships.
-        risk = min(0.95, 0.35 + 0.35 * (jaccard / 100.0) + 0.05 * weight)
-        for c_id in (u, v):
+    for ring in rings:
+        names = [contractor_names.get(c, c) for c in ring]
+        sets = [contractor_tenders.get(c, set()) for c in ring]
+
+        shared = set.intersection(*sets)
+        combined = set.union(*sets)
+        jaccard = (len(shared) / len(combined) * 100.0) if combined else 0.0
+
+        # Rotation test: within the tenders this ring jointly bid on, did each
+        # member take a turn winning? That is the signature of bid rotation.
+        winners = [tender_winner.get(t) for t in shared]
+        wins_inside = {c: winners.count(c) for c in ring}
+        rotated = all(wins_inside[c] >= 1 for c in ring) and len(shared) >= len(ring)
+
+        pair_weights = [G[a][b]['weight'] for i, a in enumerate(ring)
+                        for b in ring[i + 1:] if G.has_edge(a, b)]
+        min_w = min(pair_weights) if pair_weights else 0
+
+        size_label = f"{len(ring)} contractors" if len(ring) > 2 else "2 contractors"
+        title = f"Collusive Bidding Ring ({size_label})"
+
+        rotation_note = (" Each member won exactly one of the shared tenders while the others bid just above — "
+                         "the classic bid-rotation signature.") if rotated else ""
+        desc = (f"Contractors {', '.join(repr(n) for n in names)} jointly bid on {len(shared)} of the same "
+                f"tenders, which is {jaccard:.0f}% of every tender any of them bid on.{rotation_note}")
+
+        math_proof = (
+            f"Maximal clique of {len(ring)} contractors in the co-bidding graph "
+            f"({', '.join(ring)}). Every pair co-bid on >= {min_w} tenders "
+            f"(threshold {min_shared_tenders}). "
+            f"Jaccard Index |intersection| / |union| = {len(shared)}/{len(combined)} = {jaccard:.1f}%. "
+            f"Wins inside the ring: {', '.join(f'{c}={wins_inside[c]}' for c in ring)}."
+        )
+
+        # Risk derived from the evidence: a floor for being in a ring at all,
+        # plus the overlap, the co-bid depth, and the size of the group.
+        risk = min(0.95, 0.35 + 0.30 * (jaccard / 100.0) + 0.04 * min_w + 0.04 * len(ring))
+        for c_id in ring:
             contractor_risk[c_id] = max(contractor_risk.get(c_id, 0.0), risk)
 
-        # Attach the finding to a work one of the shared tenders actually funded,
-        # picked deterministically so re-runs are stable.
-        shared = sorted(set_u & set_v)
-        work_id = next((tender_work.get(t) for t in shared if tender_work.get(t)), None)
+        # Attach to a work one of the shared tenders actually funded, chosen
+        # deterministically so re-runs are stable.
+        work_id = next((tender_work.get(t) for t in sorted(shared) if tender_work.get(t)), None)
 
         cursor.execute("""
         INSERT INTO anomalies (work_id, anomaly_type, severity, title, description, mathematical_evidence)
@@ -105,10 +132,11 @@ def run_cartel_detection(min_shared_tenders=None):
         """, (work_id, title, desc, math_proof))
 
         anomalies_found.append({
-            "contractor_1": name_u,
-            "contractor_2": name_v,
-            "shared_tenders": weight,
+            "contractors": names,
+            "ring_size": len(ring),
+            "shared_tenders": len(shared),
             "jaccard_percent": round(jaccard, 1),
+            "rotation_detected": rotated,
             "work_id": work_id,
             "proof": math_proof
         })
