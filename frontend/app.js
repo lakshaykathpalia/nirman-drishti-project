@@ -302,14 +302,15 @@ function renderTypeChart() {
 
 /* --------------------------------------------------------------- findings */
 
-function findingCard(a, idx) {
+function findingCard(a, idx, sameType = 1) {
     const h = headline(a);
     const sc = sevClass(a.severity);
 
     return `
         <article class="finding sev-${sc}">
             <div class="finding-top">
-                <span class="case-id">${caseId(a)}</span>
+                <span class="case-id">${caseId(a)}${sameType > 1
+                    ? ` <span class="also">+${sameType - 1} more of this type</span>` : ''}</span>
                 <span class="chip chip-${sc}">${sevLabel(a.severity)}</span>
             </div>
 
@@ -332,8 +333,19 @@ function findingCard(a, idx) {
 function renderFindings() {
     const confirmed = allAnomalies.filter(isConfirmed);
 
-    $('priority-findings').innerHTML = confirmed.length
-        ? confirmed.slice(0, 4).map(a => findingCard(a, allAnomalies.indexOf(a))).join('')
+    // One case per detection type. Taking the top N by severity alone filled the
+    // panel with near-identical cartel alerts and pushed the stagnation case out
+    // entirely — an officer needs to see each kind of problem, not four of one.
+    const byType = new Map();
+    confirmed.forEach(a => {
+        if (!byType.has(a.anomaly_type)) byType.set(a.anomaly_type, { first: a, count: 0 });
+        byType.get(a.anomaly_type).count++;
+    });
+    const priority = [...byType.values()];
+
+    $('priority-findings').innerHTML = priority.length
+        ? priority.map(({ first, count }) =>
+            findingCard(first, allAnomalies.indexOf(first), count)).join('')
         : '<div class="empty-row">No confirmed findings.</div>';
 
     const list = findingFilter === 'confirmed' ? confirmed : allAnomalies;

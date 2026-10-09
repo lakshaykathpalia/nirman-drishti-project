@@ -33,6 +33,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def revalidate_frontend(request, call_next):
+    """Force the browser to revalidate the dashboard on every load.
+
+    Without this the browser heuristically caches app.js and style.css, so a
+    change to the frontend silently does not appear until a hard refresh —
+    which is a bad surprise mid-demo. The ETag still makes revalidation cheap:
+    unchanged files come back as an empty 304.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
+
 FRONTEND_DIR = config.FRONTEND_DIR
 
 @app.on_event("startup")
@@ -75,11 +92,16 @@ def get_dashboard_stats():
     total_anomalies = cursor.execute("SELECT COUNT(*) FROM anomalies;").fetchone()[0]
     critical_flags = cursor.execute("SELECT COUNT(*) FROM anomalies WHERE severity = 'CRITICAL';").fetchone()[0]
     
+    # Sum each flagged work ONCE. Joining works to anomalies counts a work as
+    # many times as it has findings, which silently inflates the headline figure
+    # the moment any work trips two detectors.
     risk_funds = cursor.execute("""
-    SELECT SUM(w.sanctioned_amount_lakhs)
-    FROM works w
-    JOIN anomalies a ON w.work_id = a.work_id
-    WHERE a.severity IN ('CRITICAL', 'HIGH');
+    SELECT SUM(sanctioned_amount_lakhs)
+    FROM works
+    WHERE work_id IN (
+        SELECT DISTINCT work_id FROM anomalies
+        WHERE severity IN ('CRITICAL', 'HIGH') AND work_id IS NOT NULL
+    );
     """).fetchone()[0] or 0.0
 
     conn.close()

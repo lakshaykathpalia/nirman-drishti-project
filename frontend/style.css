@@ -483,6 +483,19 @@ button, input {
     letter-spacing: .01em;
 }
 
+/* Shown when the panel is collapsing several alerts of one kind into one card. */
+.case-id .also {
+    font-family: var(--font);
+    font-size: 10px;
+    color: var(--ink-2);
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
 .chip {
     display: inline-flex;
     align-items: center;
